@@ -23,6 +23,8 @@ use solana_program::{
 };
 use spl_associated_token_account::instruction::create_associated_token_account;
 
+use super::get_authorized_delegate_seeds_and_validate;
+
 struct TraderAccountsContext<'a, 'info> {
     trader: &'a AccountInfo<'info>,
     _seat: &'a AccountInfo<'info>,
@@ -81,7 +83,11 @@ impl<'a, 'info> TraderAccountsContext<'a, 'info> {
     }
 }
 
-pub fn process_evict_seat(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
+pub fn process_evict_seat(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    evict_with_delegate: bool,
+) -> ProgramResult {
     let market_ai = MarketAccount::new(&accounts[2])?;
     let seat_manager = SeatManagerAccount::new_with_market(&accounts[3], market_ai.key)?;
     let seat_deposit_collector = PDA::new(
@@ -98,8 +104,25 @@ pub fn process_evict_seat(program_id: &Pubkey, accounts: &[AccountInfo]) -> Prog
     // Retrieve seat manager seeds and check if signer is authorized
     let is_fully_authorized = *signer.key == seat_manager.load()?.authority;
 
+    // If we are doing eviction with an authorized delegate, we need to validate the signer
+    let mut is_authorized_delegate = false;
+    if evict_with_delegate {
+        let authorized_delegate_pda = &accounts[13];
+
+        // First just check that the PDA passed in corresponds to the seat manager auth and the signer
+        let _seeds = get_authorized_delegate_seeds_and_validate(
+            &seat_manager.load()?.authority,
+            &signer.key,
+            &authorized_delegate_pda.key,
+            program_id,
+        )?;
+
+        // If the PDA exists, then the signer is an authorized delegate
+        is_authorized_delegate = authorized_delegate_pda.lamports() > 0;
+    }
+
     // Get market parameters to perform checks
-    let (base_mint, quote_mint, market_size_params, has_eviction_privileges) = {
+    let (base_mint, quote_mint, market_size_params, seats_are_full) = {
         let market_bytes = market_ai.data.borrow();
         let (header_bytes, market_bytes) = market_bytes.split_at(size_of::<MarketHeader>());
         let market_header =
@@ -118,8 +141,7 @@ pub fn process_evict_seat(program_id: &Pubkey, accounts: &[AccountInfo]) -> Prog
         let registered_traders = market.get_registered_traders();
 
         // When this boolean is true, signer has the privilege to evict any seat with 0 locked base lots and 0 locked quote lots
-        let has_eviction_privileges =
-            registered_traders.capacity() == registered_traders.len();
+        let seats_are_full = registered_traders.capacity() == registered_traders.len();
 
         assert_with_msg(
             base_mint_ai.info.key == &base_mint,
@@ -135,12 +157,17 @@ pub fn process_evict_seat(program_id: &Pubkey, accounts: &[AccountInfo]) -> Prog
             base_mint,
             quote_mint,
             market_header.market_size_params,
-            has_eviction_privileges,
+            seats_are_full,
         )
     };
 
+    let mut accounts_starting_index = 13;
+    if evict_with_delegate {
+        accounts_starting_index += 1;
+    }
+
     // Perform eviction for trader(s)
-    for trader_accounts in &accounts[13..].iter().chunks(6) {
+    for trader_accounts in &accounts[accounts_starting_index..].iter().chunks(6) {
         let TraderAccountsContext {
             trader: trader_ai,
             _seat,
@@ -165,11 +192,14 @@ pub fn process_evict_seat(program_id: &Pubkey, accounts: &[AccountInfo]) -> Prog
                 && trader_state.base_lots_free == 0
                 && trader_state.quote_lots_free == 0;
 
-            let can_evict_trader = if has_eviction_privileges || is_fully_authorized {
-                trader_state.base_lots_locked == 0 && trader_state.quote_lots_locked == 0
-            } else {
-                seat_is_empty
-            };
+            // If a trader's seat has 0 locked base lots, 0 locked quote lots, then an approved deligate can remove it
+            let seat_is_unlocked =
+                trader_state.base_lots_locked == 0 && trader_state.quote_lots_locked == 0;
+
+            let can_evict_trader = seat_is_empty // anyone can permissionlessly evict an empty seat
+                || (seats_are_full && seat_is_unlocked) // anyone can permissionlessly evict an unlocked seat when seats are full
+                || (is_fully_authorized && seat_is_unlocked) // the fully authorized seat manager can evict an unlocked seat
+                || (is_authorized_delegate && seat_is_unlocked); // the authorized delegate can evict an unlocked seat
 
             if can_evict_trader {
                 // Change seat status

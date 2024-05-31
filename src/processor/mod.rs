@@ -1,3 +1,4 @@
+pub mod authorized_evictor;
 pub mod change_market_fee_recipient;
 pub mod change_market_status;
 pub mod change_seat_manager_authority;
@@ -8,6 +9,7 @@ pub mod designated_market_maker;
 pub mod evict_seat;
 pub mod name_market_authority_successor;
 
+pub use authorized_evictor::*;
 pub use change_market_fee_recipient::*;
 pub use change_market_status::*;
 pub use change_seat_manager_authority::*;

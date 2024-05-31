@@ -1,9 +1,10 @@
 use ellipsis_macros::declare_id;
 use instruction::SeatManagerInstruction;
 use processor::{
-    process_change_market_status, process_claim_market_authority, process_claim_seat,
-    process_claim_seat_manager_authority, process_confirm_renounce_seat_manager_authority,
-    process_designated_market_maker, process_evict_seat, process_name_successor,
+    process_authorized_evictor, process_change_market_status, process_claim_market_authority,
+    process_claim_seat, process_claim_seat_manager_authority,
+    process_confirm_renounce_seat_manager_authority, process_designated_market_maker,
+    process_evict_seat, process_name_successor,
 };
 use solana_program::instruction::Instruction;
 use solana_program::msg;
@@ -163,7 +164,7 @@ pub fn process_instruction(
         }
         SeatManagerInstruction::EvictSeat => {
             msg!("SeatManagerInstruction::EvictSeat");
-            process_evict_seat(program_id, accounts)
+            process_evict_seat(program_id, accounts, false)
         }
         SeatManagerInstruction::AddDesignatedMarketMaker => {
             msg!("SeatManagerInstruction::AddDesignatedMarketMaker");
@@ -196,6 +197,18 @@ pub fn process_instruction(
         SeatManagerInstruction::ConfirmRenounceSeatManagerAuthority => {
             msg!("SeatManagerInstruction::ConfirmRenounceSeatManagerAuthority");
             process_confirm_renounce_seat_manager_authority(program_id, accounts)
+        }
+        SeatManagerInstruction::AddApprovedEvictor => {
+            msg!("SeatManagerInstruction::AddApprovedEvictor");
+            process_authorized_evictor(program_id, accounts, false)
+        }
+        SeatManagerInstruction::RemoveApprovedEvictor => {
+            msg!("SeatManagerInstruction::RemoveApprovedEvictor");
+            process_authorized_evictor(program_id, accounts, true)
+        }
+        SeatManagerInstruction::EvictSeatWithAuthorizedDelegate => {
+            msg!("SeatManagerInstruction::EvictSeat");
+            process_evict_seat(program_id, accounts, true)
         }
     }
 }

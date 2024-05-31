@@ -116,6 +116,44 @@ pub enum SeatManagerInstruction {
     #[account(0, writable, name = "seat_manager", desc = "This account holds the seat manager state")]
     #[account(1, signer, name = "seat_manager_authority", desc = "The seat manager authority must sign to renounce the seat manager authority")]
     ConfirmRenounceSeatManagerAuthority = 11,
+
+    /// AddApprovedEvictor
+    #[account(0, signer, name = "seat_manager_authority", desc = "The seat manager authority must sign to add an authorized delegate for eviction")]
+    #[account(1, name = "authorized_delegate")]
+    #[account(2, name = "authorized_delegate_pda")]
+    #[account(3, name = "system_program", desc = "System program")]
+    AddApprovedEvictor = 12,
+
+    /// RemoveApprovedEvictor
+    #[account(0, signer, name = "seat_manager_authority", desc = "The seat manager authority must sign to remove an authorized delegate for eviction")]
+    #[account(1, name = "authorized_delegate")]
+    #[account(2, name = "authorized_delegate_pda")]
+    #[account(3, name = "system_program", desc = "System program")]
+    RemoveApprovedEvictor = 13,
+
+    /// Evict Seat 
+    #[account(0, name = "phoenix_program", desc = "Phoenix program")]
+    #[account(1, name = "log_authority", desc = "Phoenix log authority")]
+    #[account(2, writable, name = "market", desc = "This account holds the market state")]
+    #[account(3, writable, name = "seat_manager", desc = "The seat manager account must sign to evict a seat")]
+    #[account(4, writable, name = "seat_deposit_collector", desc = "Collects deposits for claiming new seats and refunds for evicting seats")]
+    #[account(5, name = "base_mint")]
+    #[account(6, name = "quote_mint")]
+    #[account(7, writable, name = "base_vault")]
+    #[account(8, writable, name = "quote_vault")]
+    #[account(9, name = "associated_token_account_program", desc = "Associated token account program")]
+    #[account(10, name = "token_program", desc = "Token program")]
+    #[account(11, name = "system program", desc = "System program to handle refund transfers")]
+    #[account(12, signer, name = "signer")]
+    #[account(13, name = "authorized_delegate_pda")]
+    // There can be multiple traders, so the following pattern can be repeated indefinitely
+    #[account(14, writable, name = "trader")]
+    #[account(15, name = "seat", desc = "The trader's PDA seat account, seeds are [b'seat', market_address, trader_address]")]
+    #[account(16, writable, name = "base_account", desc = "The trader's associated token account for the base mint")]
+    #[account(17, writable, name = "quote_account", desc = "The trader's associated token account for the quote mint")]
+    #[account(18, writable, name = "base_account_backup", desc = "Non-ATA token account for the base mint, in case the ATA owner is no longer the trader")]
+    #[account(19, writable, name = "quote_account_backup", desc = "Non-ATA token account for the quote mint, in case the ATA owner is no longer the trader")]
+    EvictSeatWithAuthorizedDelegate = 14,
 }
 
 impl SeatManagerInstruction {
