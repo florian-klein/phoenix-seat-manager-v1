@@ -331,6 +331,7 @@ pub fn create_add_approved_evictor_instruction(
             AccountMeta::new(*authority, true),
             AccountMeta::new_readonly(*authorized_delegate, false),
             AccountMeta::new(authorized_delegate_pda, false),
+            AccountMeta::new_readonly(system_program::id(), false),
         ],
         data: SeatManagerInstruction::AddApprovedEvictor.to_vec(),
     }
@@ -347,6 +348,7 @@ pub fn create_remove_approved_evictor_instruction(
             AccountMeta::new(*authority, true),
             AccountMeta::new_readonly(*authorized_delegate, false),
             AccountMeta::new(authorized_delegate_pda, false),
+            AccountMeta::new_readonly(system_program::id(), false),
         ],
         data: SeatManagerInstruction::RemoveApprovedEvictor.to_vec(),
     }
