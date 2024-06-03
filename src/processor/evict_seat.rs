@@ -23,7 +23,7 @@ use solana_program::{
 };
 use spl_associated_token_account::instruction::create_associated_token_account;
 
-use super::get_authorized_delegate_seeds_and_validate;
+use super::{does_pda_exist, get_authorized_delegate_seeds_and_validate};
 
 struct TraderAccountsContext<'a, 'info> {
     trader: &'a AccountInfo<'info>,
@@ -118,7 +118,7 @@ pub fn process_evict_seat(
         )?;
 
         // If the PDA exists, then the signer is an authorized delegate
-        is_authorized_delegate = authorized_delegate_pda.lamports() > 0;
+        is_authorized_delegate = does_pda_exist(program_id, authorized_delegate_pda);
     }
 
     // Get market parameters to perform checks

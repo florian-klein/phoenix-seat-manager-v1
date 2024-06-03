@@ -1,5 +1,5 @@
 use phoenix::program::{
-    checkers::{Program, Signer, PDA},
+    checkers::{Program, Signer},
     system_utils::create_account,
 };
 use solana_program::{
@@ -37,7 +37,7 @@ pub fn process_authorized_evictor(
             authorized_delegate_pda_seeds.clone(),
         )?;
     } else {
-        // TODO
+        close_account(authorized_delegate_pda, seat_manager_authority.as_ref())?;
     }
 
     Ok(())
@@ -75,4 +75,23 @@ pub fn get_authorized_delegate_seeds_and_validate(
         );
         return Err(ProgramError::InvalidInstructionData.into());
     }
+}
+
+pub fn close_account<'info>(
+    info: &AccountInfo<'info>,
+    sol_destination: &AccountInfo<'info>,
+) -> Result<(), ProgramError> {
+    let dest_starting_lamports = sol_destination.lamports();
+
+    **sol_destination.lamports.borrow_mut() =
+        dest_starting_lamports.checked_add(info.lamports()).unwrap();
+
+    **info.lamports.borrow_mut() = 0;
+
+    info.assign(&system_program::ID);
+    info.realloc(0, false).map_err(Into::into)
+}
+
+pub fn does_pda_exist(program_id: &Pubkey, pda_ai: &AccountInfo) -> bool {
+    pda_ai.owner == program_id && pda_ai.lamports() != 0
 }

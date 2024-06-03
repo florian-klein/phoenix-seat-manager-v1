@@ -78,6 +78,19 @@ pub fn get_seat_manager_address(market: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[&market.to_bytes()], &crate::id())
 }
 
+pub fn get_authorized_delegate_pda(
+    seat_manager_authority: &Pubkey,
+    authorized_delegate: &Pubkey,
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[
+            &seat_manager_authority.to_bytes(),
+            &authorized_delegate.to_bytes(),
+        ],
+        &crate::id(),
+    )
+}
+
 pub fn get_seat_deposit_collector_seeds(
     market: &Pubkey,
     seat_deposit_collector: &Pubkey,

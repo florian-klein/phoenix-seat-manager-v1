@@ -11,7 +11,7 @@ use solana_program::{
 use spl_associated_token_account::get_associated_token_address;
 
 use crate::{
-    get_seat_deposit_collector_address, get_seat_manager_address,
+    get_authorized_delegate_pda, get_seat_deposit_collector_address, get_seat_manager_address,
     instruction::SeatManagerInstruction,
 };
 
@@ -317,5 +317,101 @@ pub fn create_confirm_renounce_seat_manager_authority_instruction(
             AccountMeta::new_readonly(*authority, true),
         ],
         data: SeatManagerInstruction::ConfirmRenounceSeatManagerAuthority.to_vec(),
+    }
+}
+
+pub fn create_add_approved_evictor_instruction(
+    authority: &Pubkey,
+    authorized_delegate: &Pubkey,
+) -> Instruction {
+    let (authorized_delegate_pda, _) = get_authorized_delegate_pda(authority, authorized_delegate);
+    Instruction {
+        program_id: crate::id(),
+        accounts: vec![
+            AccountMeta::new(*authority, true),
+            AccountMeta::new_readonly(*authorized_delegate, false),
+            AccountMeta::new(authorized_delegate_pda, false),
+        ],
+        data: SeatManagerInstruction::AddApprovedEvictor.to_vec(),
+    }
+}
+
+pub fn create_remove_approved_evictor_instruction(
+    authority: &Pubkey,
+    authorized_delegate: &Pubkey,
+) -> Instruction {
+    let (authorized_delegate_pda, _) = get_authorized_delegate_pda(authority, authorized_delegate);
+    Instruction {
+        program_id: crate::id(),
+        accounts: vec![
+            AccountMeta::new(*authority, true),
+            AccountMeta::new_readonly(*authorized_delegate, false),
+            AccountMeta::new(authorized_delegate_pda, false),
+        ],
+        data: SeatManagerInstruction::RemoveApprovedEvictor.to_vec(),
+    }
+}
+
+pub fn create_evict_seat_with_authorized_delegate_instruction(
+    market: &Pubkey,
+    base_mint: &Pubkey,
+    quote_mint: &Pubkey,
+    authorized_delegate: &Pubkey,
+    traders: Vec<EvictTraderAccountBackup>,
+    seat_manager_authority: &Pubkey,
+) -> Instruction {
+    let (base_vault, _) = get_vault_address(market, base_mint);
+    let (quote_vault, _) = get_vault_address(market, quote_mint);
+    let (seat_manager, _) = get_seat_manager_address(market);
+    let (seat_deposit_collector, _) = get_seat_deposit_collector_address(market);
+
+    let (authorized_delegate_pda, _) =
+        get_authorized_delegate_pda(seat_manager_authority, authorized_delegate);
+
+    let mut accounts = vec![
+        AccountMeta::new_readonly(phoenix::id(), false),
+        AccountMeta::new_readonly(phoenix_log_authority::id(), false),
+        AccountMeta::new(*market, false),
+        AccountMeta::new_readonly(seat_manager, false),
+        AccountMeta::new(seat_deposit_collector, false),
+        AccountMeta::new_readonly(*base_mint, false),
+        AccountMeta::new_readonly(*quote_mint, false),
+        AccountMeta::new(base_vault, false),
+        AccountMeta::new(quote_vault, false),
+        AccountMeta::new_readonly(spl_associated_token_account::id(), false),
+        AccountMeta::new_readonly(spl_token::id(), false),
+        AccountMeta::new_readonly(system_program::id(), false),
+        AccountMeta::new_readonly(*authorized_delegate, true),
+        AccountMeta::new_readonly(authorized_delegate_pda, false),
+    ];
+
+    for trader_accounts in traders.iter() {
+        let base_account = get_associated_token_address(&trader_accounts.trader_pubkey, base_mint);
+        let quote_account =
+            get_associated_token_address(&trader_accounts.trader_pubkey, quote_mint);
+        let (seat, _) = get_seat_address(market, &trader_accounts.trader_pubkey);
+        accounts.push(AccountMeta::new(trader_accounts.trader_pubkey, false));
+        accounts.push(AccountMeta::new(seat, false));
+        accounts.push(AccountMeta::new(base_account, false));
+        accounts.push(AccountMeta::new(quote_account, false));
+
+        for backup_account in [
+            trader_accounts.base_token_account_backup,
+            trader_accounts.quote_token_account_backup,
+        ]
+        .iter()
+        {
+            if backup_account.is_some() {
+                accounts.push(AccountMeta::new(backup_account.unwrap(), false));
+            } else {
+                accounts.push(AccountMeta::new_readonly(Pubkey::default(), false));
+            }
+        }
+    }
+
+    Instruction {
+        program_id: crate::id(),
+        accounts,
+        data: SeatManagerInstruction::EvictSeatWithAuthorizedDelegate.to_vec(),
     }
 }
