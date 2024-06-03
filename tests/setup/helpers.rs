@@ -123,15 +123,20 @@ pub async fn mint_tokens(
 #[allow(dead_code)]
 pub async fn get_and_bootstrap_maker(
     sdk: &mut SDKClient,
+    market: &Pubkey,
     mint_authority: &Keypair,
 ) -> PhoenixTestAccount {
-    let maker = setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint).await;
+    let meta = sdk.get_market_metadata(market).await.unwrap();
+    let maker = setup_account(
+        &sdk.client,
+        &mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+    )
+    .await;
     sdk.client.add_keypair(&maker.user);
     let mut init_instructions = vec![];
-    init_instructions.push(create_claim_seat_instruction(
-        &maker.user.pubkey(),
-        &sdk.active_market_key,
-    ));
+    init_instructions.push(create_claim_seat_instruction(&maker.user.pubkey(), market));
     println!("maker: {:?}", maker.user.pubkey());
     sdk.client
         .sign_send_instructions_with_payer(init_instructions, vec![&sdk.client.payer, &maker.user])
@@ -143,9 +148,17 @@ pub async fn get_and_bootstrap_maker(
 #[allow(dead_code)]
 pub async fn get_and_bootstrap_taker(
     sdk: &mut SDKClient,
+    market: &Pubkey,
     mint_authority: &Keypair,
 ) -> PhoenixTestAccount {
-    let taker = setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint).await;
+    let meta = sdk.get_market_metadata(market).await.unwrap();
+    let taker = setup_account(
+        &sdk.client,
+        &mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+    )
+    .await;
     sdk.client.add_keypair(&taker.user);
     taker
 }

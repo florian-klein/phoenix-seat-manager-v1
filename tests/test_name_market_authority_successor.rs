@@ -1,8 +1,8 @@
 use std::mem::size_of;
 
-use ellipsis_client::program_test::*;
 use phoenix::program::*;
 use phoenix_seat_manager::instruction_builders::create_name_market_authority_successor_instruction;
+use solana_program_test::*;
 
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
@@ -14,13 +14,18 @@ use crate::setup::init::PhoenixTestClient;
 
 #[tokio::test]
 async fn test_name_market_authority_successor() {
-    let PhoenixTestClient { ctx: _, sdk, .. } = bootstrap_default(0).await;
+    let PhoenixTestClient {
+        ctx: _,
+        sdk,
+        market,
+        ..
+    } = bootstrap_default(0).await;
 
     // Create seat manager instruction to name market authority successor
     let successor = Pubkey::new_unique();
 
     let name_market_authority_successor_ix = create_name_market_authority_successor_instruction(
-        &sdk.active_market_key,
+        &market,
         &sdk.client.payer.pubkey(),
         &successor,
     );
@@ -35,11 +40,7 @@ async fn test_name_market_authority_successor() {
         .unwrap();
 
     // Verify that the market authority successor is set to the new keypair
-    let market_account_data = sdk
-        .client
-        .get_account_data(&sdk.active_market_key)
-        .await
-        .unwrap();
+    let market_account_data = sdk.client.get_account_data(&market).await.unwrap();
     let (header_bytes, _bytes) = market_account_data.split_at(size_of::<MarketHeader>());
 
     let header = bytemuck::try_from_bytes::<MarketHeader>(header_bytes).unwrap();
@@ -50,14 +51,19 @@ async fn test_name_market_authority_successor() {
 #[tokio::test]
 async fn test_name_market_authority_unauthorized_seat_authority_signed() {
     // Same setup as test_name_market_authority_successor except authority is not the payer not a random pubkey
-    let PhoenixTestClient { ctx: _, sdk, .. } = bootstrap_default(0).await;
+    let PhoenixTestClient {
+        ctx: _,
+        sdk,
+        market,
+        ..
+    } = bootstrap_default(0).await;
 
     // Create seat manager instruction to name market authority successor
     let successor = Pubkey::new_unique();
     let incorrect_authority = Keypair::new();
 
     let name_market_authority_successor_ix = create_name_market_authority_successor_instruction(
-        &sdk.active_market_key,
+        &market,
         &incorrect_authority.pubkey(),
         &successor,
     );

@@ -15,6 +15,7 @@ async fn test_name_seat_manager_successor_happy_path() {
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority: _,
     } = bootstrap_default(5).await;
 
@@ -22,7 +23,7 @@ async fn test_name_seat_manager_successor_happy_path() {
 
     let name_successor_ix = create_name_seat_manager_successor_instruction(
         &sdk.client.payer.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &successor,
     );
 
@@ -31,7 +32,7 @@ async fn test_name_seat_manager_successor_happy_path() {
         .await
         .unwrap();
 
-    let (seat_manager_address, _) = get_seat_manager_address(&sdk.active_market_key);
+    let (seat_manager_address, _) = get_seat_manager_address(&market);
     let seat_manager_data = sdk
         .client
         .get_account_data(&seat_manager_address)
@@ -47,6 +48,7 @@ async fn test_name_seat_manager_sucesssor_fails_if_authority_not_signer_or_autho
     let PhoenixTestClient {
         ctx: _,
         mut sdk,
+        market,
         mint_authority: _,
     } = bootstrap_default(5).await;
 
@@ -57,11 +59,8 @@ async fn test_name_seat_manager_sucesssor_fails_if_authority_not_signer_or_autho
         .unwrap();
 
     // Fails if authority mismatch with seat manager account (real authority is sdk.client.pubkey)
-    let name_successor_ix = create_name_seat_manager_successor_instruction(
-        &unauthorized.pubkey(),
-        &sdk.active_market_key,
-        &successor,
-    );
+    let name_successor_ix =
+        create_name_seat_manager_successor_instruction(&unauthorized.pubkey(), &market, &successor);
 
     assert!(sdk
         .client
@@ -72,7 +71,7 @@ async fn test_name_seat_manager_sucesssor_fails_if_authority_not_signer_or_autho
     // Fails if authority is not a signer
     let mut name_successor_ix = create_name_seat_manager_successor_instruction(
         &sdk.client.payer.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &successor,
     );
 

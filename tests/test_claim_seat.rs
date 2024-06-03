@@ -19,13 +19,20 @@ async fn test_claim_seat_without_trader_as_signer_fails_and_with_signer_succeeds
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority,
     } = bootstrap_default(5).await;
 
-    let trader = setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint)
-        .await
-        .user;
-    let claim_seat_ix = create_claim_seat_instruction(&trader.pubkey(), &sdk.active_market_key);
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
+    let trader = setup_account(
+        &sdk.client,
+        &mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+    )
+    .await
+    .user;
+    let claim_seat_ix = create_claim_seat_instruction(&trader.pubkey(), &market);
 
     // Assert that claim seat fails when trader is not a signer
     assert!(sdk
@@ -42,14 +49,14 @@ async fn test_claim_seat_without_trader_as_signer_fails_and_with_signer_succeeds
     // Asert able to create limit order
     let maker_order_packet = OrderPacket::new_limit_order_default(
         Side::Ask,
-        sdk.float_price_to_ticks(10.0),
+        meta.float_price_to_ticks_rounded_up(10.0),
         1_000_000_000,
     );
     let limit_order_ix = create_new_order_instruction(
-        &sdk.active_market_key,
+        &market,
         &trader.pubkey(),
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &meta.base_mint,
+        &meta.quote_mint,
         &maker_order_packet,
     );
     assert!(sdk
@@ -64,16 +71,24 @@ async fn test_claim_seat_authorized_happy_path() {
     let PhoenixTestClient {
         mut ctx,
         sdk,
+        market,
         mint_authority,
     } = bootstrap_default(5).await;
 
-    let trader = setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint)
-        .await
-        .user;
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
+
+    let trader = setup_account(
+        &sdk.client,
+        &mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+    )
+    .await
+    .user;
 
     let claim_seat_ix = create_claim_seat_authorized_instruction(
         &trader.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &sdk.client.payer.pubkey(),
     );
 
@@ -86,14 +101,14 @@ async fn test_claim_seat_authorized_happy_path() {
     // Assert able to create limit order
     let maker_order_packet = OrderPacket::new_limit_order_default(
         Side::Ask,
-        sdk.float_price_to_ticks(10.0),
+        meta.float_price_to_ticks_rounded_up(10.0),
         1_000_000_000,
     );
     let limit_order_ix = create_new_order_instruction(
-        &sdk.active_market_key,
+        &market,
         &trader.pubkey(),
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &meta.base_mint,
+        &meta.quote_mint,
         &maker_order_packet,
     );
     assert!(sdk
@@ -106,7 +121,7 @@ async fn test_claim_seat_authorized_happy_path() {
 
     let claim_seat_ix = create_claim_seat_authorized_instruction(
         &trader.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &sdk.client.payer.pubkey(),
     );
 
@@ -122,12 +137,19 @@ async fn test_claim_seat_authorized_without_authority_signer_fails() {
     let PhoenixTestClient {
         ctx: _,
         mut sdk,
+        market,
         mint_authority,
     } = bootstrap_default(5).await;
 
-    let trader = setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint)
-        .await
-        .user;
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
+    let trader = setup_account(
+        &sdk.client,
+        &mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+    )
+    .await
+    .user;
 
     let unauthorized_payer = Keypair::new();
     airdrop(&sdk.client, &unauthorized_payer.pubkey(), 1_000_000_000)
@@ -136,7 +158,7 @@ async fn test_claim_seat_authorized_without_authority_signer_fails() {
 
     let claim_seat_ix = create_claim_seat_authorized_instruction(
         &trader.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &unauthorized_payer.pubkey(),
     );
 
@@ -148,7 +170,7 @@ async fn test_claim_seat_authorized_without_authority_signer_fails() {
 
     let mut claim_seat_ix = create_claim_seat_authorized_instruction(
         &trader.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &sdk.client.payer.pubkey(),
     );
 
@@ -169,22 +191,28 @@ async fn test_claim_seat_deposits_two_token_accounts_lamports() {
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority,
     } = bootstrap_default(5).await;
 
-    let trader = setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint)
-        .await
-        .user;
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
+    let trader = setup_account(
+        &sdk.client,
+        &mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+    )
+    .await
+    .user;
 
-    let claim_seat_ix = create_claim_seat_instruction(&trader.pubkey(), &sdk.active_market_key);
+    let claim_seat_ix = create_claim_seat_instruction(&trader.pubkey(), &market);
 
     sdk.client
         .sign_send_instructions(vec![claim_seat_ix], vec![&trader])
         .await
         .unwrap();
 
-    let seat_deposit_collector_address =
-        get_seat_deposit_collector_address(&sdk.active_market_key).0;
+    let seat_deposit_collector_address = get_seat_deposit_collector_address(&market).0;
     let seat_deposit_collector_ending_lamports = sdk
         .client
         .get_account(&seat_deposit_collector_address)

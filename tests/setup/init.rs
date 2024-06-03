@@ -1,8 +1,8 @@
-use ellipsis_client::program_test::*;
 use ellipsis_client::EllipsisClient;
 use phoenix::program::instruction_builders::*;
 use phoenix_seat_manager::get_seat_manager_address;
 use phoenix_seat_manager::instruction_builders::create_claim_market_authority_instruction;
+use solana_program_test::*;
 
 use phoenix::program::status::MarketStatus;
 use phoenix::program::*;
@@ -34,6 +34,7 @@ pub struct PhoenixTestClient {
     pub ctx: ProgramTestContext,
     pub sdk: SDKClient,
     pub mint_authority: Keypair,
+    pub market: Pubkey,
 }
 
 pub fn phoenix_test() -> ProgramTest {
@@ -225,8 +226,11 @@ async fn bootstrap_with_parameters(
 
     PhoenixTestClient {
         ctx: context,
-        sdk: SDKClient::new_from_ellipsis_client(&market.pubkey(), ellipsis_client).await,
+        sdk: SDKClient::new_from_ellipsis_client(ellipsis_client)
+            .await
+            .unwrap(),
         mint_authority: authority,
+        market: market.pubkey(),
     }
 }
 

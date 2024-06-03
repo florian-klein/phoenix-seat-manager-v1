@@ -18,16 +18,14 @@ async fn test_add_remove_happy_path() {
         ctx: _,
         sdk,
         mint_authority: _,
+        market,
     } = bootstrap_default(5).await;
 
     // Add seat for trader
     let trader = Pubkey::new_unique();
 
-    let claim_seat = create_claim_seat_authorized_instruction(
-        &trader,
-        &sdk.active_market_key,
-        &sdk.client.payer.pubkey(),
-    );
+    let claim_seat =
+        create_claim_seat_authorized_instruction(&trader, &market, &sdk.client.payer.pubkey());
 
     sdk.client
         .sign_send_instructions(vec![claim_seat], vec![])
@@ -35,15 +33,14 @@ async fn test_add_remove_happy_path() {
         .unwrap();
 
     // Add designated MM
-    let add_as_mm =
-        create_add_dmm_instruction(&sdk.active_market_key, &sdk.client.payer.pubkey(), &trader);
+    let add_as_mm = create_add_dmm_instruction(&market, &sdk.client.payer.pubkey(), &trader);
 
     sdk.client
         .sign_send_instructions(vec![add_as_mm], vec![])
         .await
         .unwrap();
 
-    let (seat_manager_address, _) = get_seat_manager_address(&sdk.active_market_key);
+    let (seat_manager_address, _) = get_seat_manager_address(&market);
     let seat_manager_data = sdk
         .client
         .get_account_data(&seat_manager_address)
@@ -54,14 +51,13 @@ async fn test_add_remove_happy_path() {
     assert_eq!(seat_manager.num_makers, 1);
 
     // Remove designated MM
-    let remove_as_mm =
-        create_remove_dmm_instruction(&sdk.active_market_key, &sdk.client.payer.pubkey(), &trader);
+    let remove_as_mm = create_remove_dmm_instruction(&market, &sdk.client.payer.pubkey(), &trader);
     sdk.client
         .sign_send_instructions(vec![remove_as_mm], vec![])
         .await
         .unwrap();
 
-    let (seat_manager_address, _) = get_seat_manager_address(&sdk.active_market_key);
+    let (seat_manager_address, _) = get_seat_manager_address(&market);
     let seat_manager_data = sdk
         .client
         .get_account_data(&seat_manager_address)
@@ -77,21 +73,20 @@ async fn test_add_remove_fails_if_trader_has_no_seat() {
         ctx: _,
         sdk,
         mint_authority: _,
+        market,
     } = bootstrap_default(5).await;
 
     let trader = Pubkey::new_unique();
 
     // Add designated MM errors if no seat
-    let add_as_mm =
-        create_add_dmm_instruction(&sdk.active_market_key, &sdk.client.payer.pubkey(), &trader);
+    let add_as_mm = create_add_dmm_instruction(&market, &sdk.client.payer.pubkey(), &trader);
 
     assert!(sdk
         .client
         .sign_send_instructions(vec![add_as_mm], vec![])
         .await
         .is_err());
-    let remove_as_mm =
-        create_remove_dmm_instruction(&sdk.active_market_key, &sdk.client.payer.pubkey(), &trader);
+    let remove_as_mm = create_remove_dmm_instruction(&market, &sdk.client.payer.pubkey(), &trader);
 
     assert!(sdk
         .client
@@ -106,15 +101,13 @@ async fn test_add_remove_fails_if_authority_not_signer_or_authority_mismatch() {
         ctx: _,
         mut sdk,
         mint_authority: _,
+        market,
     } = bootstrap_default(5).await;
 
     let trader = Pubkey::new_unique();
 
-    let claim_seat = create_claim_seat_authorized_instruction(
-        &trader,
-        &sdk.active_market_key,
-        &sdk.client.payer.pubkey(),
-    );
+    let claim_seat =
+        create_claim_seat_authorized_instruction(&trader, &market, &sdk.client.payer.pubkey());
 
     sdk.client
         .sign_send_instructions(vec![claim_seat], vec![])
@@ -126,8 +119,7 @@ async fn test_add_remove_fails_if_authority_not_signer_or_authority_mismatch() {
         .await
         .unwrap();
 
-    let add_as_mm =
-        create_add_dmm_instruction(&sdk.active_market_key, &unauthorized.pubkey(), &trader);
+    let add_as_mm = create_add_dmm_instruction(&market, &unauthorized.pubkey(), &trader);
 
     // Signer that does not match seat manager authority (client.payer) fails
     assert!(sdk
@@ -137,8 +129,7 @@ async fn test_add_remove_fails_if_authority_not_signer_or_authority_mismatch() {
         .is_err());
 
     // Missing authority signer fails
-    let mut add_as_mm =
-        create_add_dmm_instruction(&sdk.active_market_key, &sdk.client.payer.pubkey(), &trader);
+    let mut add_as_mm = create_add_dmm_instruction(&market, &sdk.client.payer.pubkey(), &trader);
 
     add_as_mm.accounts[3].is_signer = false;
     sdk.client.add_keypair(&unauthorized);

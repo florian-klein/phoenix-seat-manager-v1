@@ -36,21 +36,32 @@ async fn test_evict_seat_multiple_authorized() {
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority,
     } = bootstrap_default(5).await;
 
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
+
     // Claim seats for two traders
-    let trader_one =
-        setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint).await;
+    let trader_one = setup_account(
+        &sdk.client,
+        &mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+    )
+    .await;
 
-    let trader_two =
-        setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint).await;
+    let trader_two = setup_account(
+        &sdk.client,
+        &mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+    )
+    .await;
 
-    let claim_seat_one =
-        create_claim_seat_instruction(&trader_one.user.pubkey(), &sdk.active_market_key);
+    let claim_seat_one = create_claim_seat_instruction(&trader_one.user.pubkey(), &market);
 
-    let claim_seat_two =
-        create_claim_seat_instruction(&trader_two.user.pubkey(), &sdk.active_market_key);
+    let claim_seat_two = create_claim_seat_instruction(&trader_two.user.pubkey(), &market);
 
     sdk.client
         .sign_send_instructions(
@@ -60,15 +71,15 @@ async fn test_evict_seat_multiple_authorized() {
         .await
         .unwrap();
 
-    let traders = sdk.get_traders().await;
+    let traders = sdk.get_traders_with_market_key(&market).await.unwrap();
     assert!(traders.get(&trader_one.user.pubkey()).is_some());
     assert!(traders.get(&trader_two.user.pubkey()).is_some());
 
     // Evict seats for both traders
     let evict_seats = create_evict_seat_instruction(
-        &sdk.active_market_key,
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &market,
+        &meta.base_mint,
+        &meta.quote_mint,
         &sdk.client.payer.pubkey(),
         vec![
             EvictTraderAccountBackup {
@@ -92,7 +103,7 @@ async fn test_evict_seat_multiple_authorized() {
         .unwrap();
 
     // Assert that neither trader are in the market state
-    let traders = sdk.get_traders().await;
+    let traders = sdk.get_traders_with_market_key(&market).await.unwrap();
     assert!(traders.get(&trader_one.user.pubkey()).is_none());
     assert!(traders.get(&trader_two.user.pubkey()).is_none());
 }
@@ -102,19 +113,26 @@ async fn test_evict_seat_permissionless_succeeds_when_evicting_empty_seats() {
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority,
     } = bootstrap_default(5).await;
 
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
     let mut new_traders = vec![];
     // Need to fill market with traders
     let num_new_traders = NUM_SEATS / 2;
     for _ in 0..num_new_traders {
-        let trader =
-            setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint).await;
+        let trader = setup_account(
+            &sdk.client,
+            &mint_authority,
+            meta.base_mint,
+            meta.quote_mint,
+        )
+        .await;
 
         let claim_seat = create_claim_seat_authorized_instruction(
             &trader.user.pubkey(),
-            &sdk.active_market_key,
+            &market,
             &sdk.client.payer.pubkey(),
         );
 
@@ -139,9 +157,9 @@ async fn test_evict_seat_permissionless_succeeds_when_evicting_empty_seats() {
     }
 
     let evict_seats = create_evict_seat_instruction(
-        &sdk.active_market_key,
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &market,
+        &meta.base_mint,
+        &meta.quote_mint,
         &evictor.pubkey(),
         traders_to_evict
             .iter()
@@ -165,7 +183,7 @@ async fn test_evict_seat_permissionless_succeeds_when_evicting_empty_seats() {
         .unwrap();
 
     // Assert that all traders were evicted
-    let traders = sdk.get_traders().await;
+    let traders = sdk.get_traders_with_market_key(&market).await.unwrap();
     let eviction_successful = traders_to_evict
         .iter()
         .all(|i| traders.get(&new_traders[*i].user.pubkey()).is_none());
@@ -178,37 +196,47 @@ async fn test_evict_seat_permissionless_succeeds_when_full_and_only_evicts_one()
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority,
     } = bootstrap_default(5).await;
 
-    let trader_one =
-        setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint).await;
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
+    let trader_one = setup_account(
+        &sdk.client,
+        &mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+    )
+    .await;
 
-    let trader_two =
-        setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint).await;
+    let trader_two = setup_account(
+        &sdk.client,
+        &mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+    )
+    .await;
 
-    let claim_seat_one =
-        create_claim_seat_instruction(&trader_one.user.pubkey(), &sdk.active_market_key);
+    let claim_seat_one = create_claim_seat_instruction(&trader_one.user.pubkey(), &market);
 
     let deposit_one = create_deposit_funds_instruction(
-        &sdk.active_market_key,
+        &market,
         &trader_one.user.pubkey(),
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &meta.base_mint,
+        &meta.quote_mint,
         &DepositParams {
             quote_lots_to_deposit: 1,
             base_lots_to_deposit: 1,
         },
     );
 
-    let claim_seat_two =
-        create_claim_seat_instruction(&trader_two.user.pubkey(), &sdk.active_market_key);
+    let claim_seat_two = create_claim_seat_instruction(&trader_two.user.pubkey(), &market);
 
     let deposit_two = create_deposit_funds_instruction(
-        &sdk.active_market_key,
+        &market,
         &trader_two.user.pubkey(),
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &meta.base_mint,
+        &meta.quote_mint,
         &DepositParams {
             quote_lots_to_deposit: 1,
             base_lots_to_deposit: 1,
@@ -223,7 +251,7 @@ async fn test_evict_seat_permissionless_succeeds_when_full_and_only_evicts_one()
         .await
         .unwrap();
 
-    let traders = sdk.get_traders().await;
+    let traders = sdk.get_traders_with_market_key(&market).await.unwrap();
     assert!(traders.get(&trader_one.user.pubkey()).is_some());
     assert!(traders.get(&trader_two.user.pubkey()).is_some());
 
@@ -232,11 +260,8 @@ async fn test_evict_seat_permissionless_succeeds_when_full_and_only_evicts_one()
     for _ in 0..num_new_traders {
         let trader = Pubkey::new_unique();
 
-        let claim_seat = create_claim_seat_authorized_instruction(
-            &trader,
-            &sdk.active_market_key,
-            &sdk.client.payer.pubkey(),
-        );
+        let claim_seat =
+            create_claim_seat_authorized_instruction(&trader, &market, &sdk.client.payer.pubkey());
 
         let result = sdk
             .client
@@ -245,19 +270,15 @@ async fn test_evict_seat_permissionless_succeeds_when_full_and_only_evicts_one()
         println!("Result: {:?}", result);
     }
 
-    let market_bytes = sdk
-        .client
-        .get_account_data(&sdk.active_market_key)
-        .await
-        .unwrap();
+    let market_bytes = sdk.client.get_account_data(&market).await.unwrap();
     let (header_bytes, market_bytes) = market_bytes.split_at(size_of::<MarketHeader>());
     let market_header = bytemuck::try_from_bytes::<MarketHeader>(header_bytes).unwrap();
 
-    let market = load_with_dispatch(&market_header.market_size_params, market_bytes)
+    let phoenix_market = load_with_dispatch(&market_header.market_size_params, market_bytes)
         .unwrap()
         .inner;
 
-    let registered_traders = market.get_registered_traders();
+    let registered_traders = phoenix_market.get_registered_traders();
 
     println!("Capacity: {:?}", registered_traders.capacity());
     println!("Length: {:?}", registered_traders.len());
@@ -268,9 +289,9 @@ async fn test_evict_seat_permissionless_succeeds_when_full_and_only_evicts_one()
     let unauthorized_keypair = Keypair::new();
 
     let evict_seats = create_evict_seat_instruction(
-        &sdk.active_market_key,
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &market,
+        &meta.base_mint,
+        &meta.quote_mint,
         &unauthorized_keypair.pubkey(),
         vec![
             EvictTraderAccountBackup {
@@ -298,7 +319,7 @@ async fn test_evict_seat_permissionless_succeeds_when_full_and_only_evicts_one()
         .unwrap();
 
     // Assert that trader one was evicted but trader two remains
-    let traders = sdk.get_traders().await;
+    let traders = sdk.get_traders_with_market_key(&market).await.unwrap();
     assert!(traders.get(&trader_one.user.pubkey()).is_none());
     assert!(traders.get(&trader_two.user.pubkey()).is_some());
 }
@@ -309,17 +330,16 @@ async fn test_evict_seat_fails_on_designated_market_maker() {
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority: _,
     } = bootstrap_default(5).await;
 
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
     // Add seat for trader
     let trader = Pubkey::new_unique();
 
-    let claim_seat = create_claim_seat_authorized_instruction(
-        &trader,
-        &sdk.active_market_key,
-        &sdk.client.payer.pubkey(),
-    );
+    let claim_seat =
+        create_claim_seat_authorized_instruction(&trader, &market, &sdk.client.payer.pubkey());
 
     sdk.client
         .sign_send_instructions(vec![claim_seat], vec![])
@@ -327,15 +347,14 @@ async fn test_evict_seat_fails_on_designated_market_maker() {
         .unwrap();
 
     // Add designated MM
-    let add_as_mm =
-        create_add_dmm_instruction(&sdk.active_market_key, &sdk.client.payer.pubkey(), &trader);
+    let add_as_mm = create_add_dmm_instruction(&market, &sdk.client.payer.pubkey(), &trader);
 
     sdk.client
         .sign_send_instructions(vec![add_as_mm], vec![])
         .await
         .unwrap();
 
-    let (seat_manager_address, _) = get_seat_manager_address(&sdk.active_market_key);
+    let (seat_manager_address, _) = get_seat_manager_address(&market);
     let seat_manager_data = sdk
         .client
         .get_account_data(&seat_manager_address)
@@ -347,9 +366,9 @@ async fn test_evict_seat_fails_on_designated_market_maker() {
 
     // Evict seats for dmm - should fail
     let evict_seat = create_evict_seat_instruction(
-        &sdk.active_market_key,
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &market,
+        &meta.base_mint,
+        &meta.quote_mint,
         &sdk.client.payer.pubkey(),
         vec![EvictTraderAccountBackup {
             trader_pubkey: trader,
@@ -363,7 +382,7 @@ async fn test_evict_seat_fails_on_designated_market_maker() {
         .await
         .unwrap();
 
-    let (seat_manager_address, _) = get_seat_manager_address(&sdk.active_market_key);
+    let (seat_manager_address, _) = get_seat_manager_address(&market);
     let seat_manager_data = sdk
         .client
         .get_account_data(&seat_manager_address)
@@ -378,14 +397,22 @@ async fn test_evict_seat_fails_on_designated_market_maker() {
 async fn test_evict_seat_refunds_claim_seat_deposit() {
     let PhoenixTestClient {
         ctx: _,
+        market,
         sdk,
         mint_authority,
     } = bootstrap_default(5).await;
 
-    let trader = setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint)
-        .await
-        .user;
-    let claim_seat_ix = create_claim_seat_instruction(&trader.pubkey(), &sdk.active_market_key);
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
+
+    let trader = setup_account(
+        &sdk.client,
+        &mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+    )
+    .await
+    .user;
+    let claim_seat_ix = create_claim_seat_instruction(&trader.pubkey(), &market);
 
     sdk.client
         .sign_send_instructions(vec![claim_seat_ix], vec![&trader])
@@ -400,9 +427,9 @@ async fn test_evict_seat_refunds_claim_seat_deposit() {
         .unwrap()
         .lamports;
     let evict_seat_ix = create_evict_seat_instruction(
-        &sdk.active_market_key,
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &market,
+        &meta.base_mint,
+        &meta.quote_mint,
         &sdk.client.payer.pubkey(),
         vec![EvictTraderAccountBackup {
             trader_pubkey: trader.pubkey(),
@@ -421,8 +448,7 @@ async fn test_evict_seat_refunds_claim_seat_deposit() {
         )
         .await
         .unwrap();
-    let seat_deposit_collector_address =
-        get_seat_deposit_collector_address(&sdk.active_market_key).0;
+    let seat_deposit_collector_address = get_seat_deposit_collector_address(&market).0;
 
     assert!(sdk
         .client
@@ -450,13 +476,21 @@ async fn test_evict_seat_no_refunds_if_trader_closes_ata() {
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority,
     } = bootstrap_default(5).await;
 
-    let trader = setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint)
-        .await
-        .user;
-    let claim_seat_ix = create_claim_seat_instruction(&trader.pubkey(), &sdk.active_market_key);
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
+
+    let trader = setup_account(
+        &sdk.client,
+        &mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+    )
+    .await
+    .user;
+    let claim_seat_ix = create_claim_seat_instruction(&trader.pubkey(), &market);
 
     sdk.client
         .sign_send_instructions(vec![claim_seat_ix], vec![&trader])
@@ -464,7 +498,7 @@ async fn test_evict_seat_no_refunds_if_trader_closes_ata() {
         .unwrap();
 
     // Close trader ata. Must burn all tokens first
-    let base_ata = get_associated_token_address(&trader.pubkey(), &sdk.base_mint);
+    let base_ata = get_associated_token_address(&trader.pubkey(), &meta.base_mint);
     let base_amount = spl_token::state::Account::unpack_from_slice(
         sdk.client
             .get_account_data(&base_ata)
@@ -477,14 +511,14 @@ async fn test_evict_seat_no_refunds_if_trader_closes_ata() {
     let base_burn_ix = burn(
         &spl_token::id(),
         &base_ata,
-        &sdk.base_mint,
+        &meta.base_mint,
         &trader.pubkey(),
         &[&trader.pubkey()],
         base_amount,
     )
     .unwrap();
 
-    let quote_ata = get_associated_token_address(&trader.pubkey(), &sdk.quote_mint);
+    let quote_ata = get_associated_token_address(&trader.pubkey(), &meta.quote_mint);
     let quote_amount = spl_token::state::Account::unpack_from_slice(
         sdk.client
             .get_account_data(&quote_ata)
@@ -498,7 +532,7 @@ async fn test_evict_seat_no_refunds_if_trader_closes_ata() {
     let quote_burn_ix = burn(
         &spl_token::id(),
         &quote_ata,
-        &sdk.quote_mint,
+        &meta.quote_mint,
         &trader.pubkey(),
         &[&trader.pubkey()],
         quote_amount,
@@ -542,9 +576,9 @@ async fn test_evict_seat_no_refunds_if_trader_closes_ata() {
         .lamports;
 
     let evict_seat_ix = create_evict_seat_instruction(
-        &sdk.active_market_key,
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &market,
+        &meta.base_mint,
+        &meta.quote_mint,
         &sdk.client.payer.pubkey(),
         vec![EvictTraderAccountBackup {
             trader_pubkey: trader.pubkey(),
@@ -565,8 +599,7 @@ async fn test_evict_seat_no_refunds_if_trader_closes_ata() {
         .unwrap();
 
     // Seat deposit collector should have no more lamports, due to using deposit to create ATAs
-    let seat_deposit_collector_address =
-        get_seat_deposit_collector_address(&sdk.active_market_key).0;
+    let seat_deposit_collector_address = get_seat_deposit_collector_address(&market).0;
     assert!(sdk
         .client
         .get_account(&seat_deposit_collector_address)
@@ -588,13 +621,21 @@ async fn test_evict_seat_change_ata_owners_uses_backup_token_accounts() {
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority,
     } = bootstrap_default(5).await;
 
-    let trader = setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint)
-        .await
-        .user;
-    let claim_seat_ix = create_claim_seat_instruction(&trader.pubkey(), &sdk.active_market_key);
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
+
+    let trader = setup_account(
+        &sdk.client,
+        &mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+    )
+    .await
+    .user;
+    let claim_seat_ix = create_claim_seat_instruction(&trader.pubkey(), &market);
 
     sdk.client
         .sign_send_instructions(vec![claim_seat_ix], vec![&trader])
@@ -603,7 +644,7 @@ async fn test_evict_seat_change_ata_owners_uses_backup_token_accounts() {
 
     // Change ATA owners
     let new_owner = Pubkey::new_unique();
-    let base_ata = get_associated_token_address(&trader.pubkey(), &sdk.base_mint);
+    let base_ata = get_associated_token_address(&trader.pubkey(), &meta.base_mint);
     let change_owner = spl_token::instruction::set_authority(
         &spl_token::id(),
         &base_ata,
@@ -614,7 +655,7 @@ async fn test_evict_seat_change_ata_owners_uses_backup_token_accounts() {
     )
     .unwrap();
 
-    let quote_ata = get_associated_token_address(&trader.pubkey(), &sdk.quote_mint);
+    let quote_ata = get_associated_token_address(&trader.pubkey(), &meta.quote_mint);
     let quote_change_owner = spl_token::instruction::set_authority(
         &spl_token::id(),
         &quote_ata,
@@ -643,7 +684,7 @@ async fn test_evict_seat_change_ata_owners_uses_backup_token_accounts() {
     let create_backup_base_token = spl_token::instruction::initialize_account3(
         &spl_token::id(),
         &new_base_token_account.pubkey(),
-        &sdk.base_mint,
+        &meta.base_mint,
         &trader.pubkey(),
     )
     .unwrap();
@@ -658,7 +699,7 @@ async fn test_evict_seat_change_ata_owners_uses_backup_token_accounts() {
     let create_backup_quote_token = spl_token::instruction::initialize_account3(
         &spl_token::id(),
         &new_quote_token_account.pubkey(),
-        &sdk.quote_mint,
+        &meta.quote_mint,
         &trader.pubkey(),
     );
 
@@ -697,9 +738,9 @@ async fn test_evict_seat_change_ata_owners_uses_backup_token_accounts() {
 
     // Evict seat with backup token accounts
     let evict_seat_ix = create_evict_seat_instruction(
-        &sdk.active_market_key,
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &market,
+        &meta.base_mint,
+        &meta.quote_mint,
         &sdk.client.payer.pubkey(),
         vec![EvictTraderAccountBackup {
             trader_pubkey: trader.pubkey(),
@@ -733,8 +774,7 @@ async fn test_evict_seat_change_ata_owners_uses_backup_token_accounts() {
         .unwrap()
         .lamports;
 
-    let seat_deposit_collector_address =
-        get_seat_deposit_collector_address(&sdk.active_market_key).0;
+    let seat_deposit_collector_address = get_seat_deposit_collector_address(&market).0;
 
     // Seat deposit collector account should be empty after refunding signer for creation of backup accounts
     assert!(sdk

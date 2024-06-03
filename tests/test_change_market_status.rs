@@ -15,11 +15,12 @@ async fn test_change_market_status_happy_path() {
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority: _,
     } = bootstrap_default(5).await;
 
     let change_market_status = create_change_market_status_instruction(
-        &sdk.active_market_key,
+        &market,
         &sdk.client.payer.pubkey(),
         MarketStatus::Paused,
     );
@@ -29,11 +30,7 @@ async fn test_change_market_status_happy_path() {
         .await
         .unwrap();
 
-    let market_data = sdk
-        .client
-        .get_account_data(&sdk.active_market_key)
-        .await
-        .unwrap();
+    let market_data = sdk.client.get_account_data(&market).await.unwrap();
 
     let (header_bytes, _) = market_data.split_at(size_of::<MarketHeader>());
     let header = bytemuck::try_from_bytes::<MarketHeader>(header_bytes).unwrap();
@@ -45,6 +42,7 @@ async fn test_change_market_status_happy_path() {
 async fn test_change_market_status_fails_if_authority_not_signer_or_unauthorized_signer() {
     let PhoenixTestClient {
         ctx: _,
+        market,
         mut sdk,
         mint_authority: _,
     } = bootstrap_default(5).await;
@@ -55,7 +53,7 @@ async fn test_change_market_status_fails_if_authority_not_signer_or_unauthorized
         .unwrap();
 
     let change_market_status = create_change_market_status_instruction(
-        &sdk.active_market_key,
+        &market,
         &unauthorized.pubkey(),
         MarketStatus::Paused,
     );
@@ -67,7 +65,7 @@ async fn test_change_market_status_fails_if_authority_not_signer_or_unauthorized
         .is_err());
 
     let mut change_market_status = create_change_market_status_instruction(
-        &sdk.active_market_key,
+        &market,
         &sdk.client.payer.pubkey(),
         MarketStatus::Paused,
     );

@@ -20,24 +20,27 @@ use crate::setup::init::*;
 
 #[tokio::test]
 async fn test_change_market_fee_recipient_no_unclaimed() {
-    let PhoenixTestClient { ctx: _, sdk, .. } = bootstrap_default(0).await;
+    let PhoenixTestClient {
+        ctx: _,
+        sdk,
+        market,
+        ..
+    } = bootstrap_default(0).await;
     println!("Seat program authority: {}", sdk.client.payer.pubkey());
 
     let new_fee_recipient = Pubkey::new_unique();
 
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
+
     let change_market_fee_recipient_ix = create_change_market_fee_recipient_instruction(
-        &sdk.active_market_key,
+        &market,
         &sdk.client.payer.pubkey(),
         &new_fee_recipient,
-        &sdk.quote_mint,
+        &meta.quote_mint,
         &sdk.client.payer.pubkey(),
     );
 
-    let market_account_data = sdk
-        .client
-        .get_account_data(&sdk.active_market_key)
-        .await
-        .unwrap();
+    let market_account_data = sdk.client.get_account_data(&market).await.unwrap();
     let (header_bytes, _market_bytes) = market_account_data.split_at(size_of::<MarketHeader>());
     let header: &MarketHeader = bytemuck::try_from_bytes(header_bytes).unwrap();
 
@@ -51,11 +54,7 @@ async fn test_change_market_fee_recipient_no_unclaimed() {
         .await
         .unwrap();
     // Verify that the market authority successor is set to the new keypair
-    let market_account_data = sdk
-        .client
-        .get_account_data(&sdk.active_market_key)
-        .await
-        .unwrap();
+    let market_account_data = sdk.client.get_account_data(&market).await.unwrap();
     let (header_bytes, _bytes) = market_account_data.split_at(size_of::<MarketHeader>());
 
     let header = bytemuck::try_from_bytes::<MarketHeader>(header_bytes).unwrap();
@@ -69,20 +68,22 @@ async fn test_change_market_fee_recipient_unclaimed_fees() {
     let PhoenixTestClient {
         ctx: _,
         mut sdk,
+        market,
         mint_authority,
     } = bootstrap_default(5).await;
     //Place limit order with maker (keypair 1)
-    let maker = get_and_bootstrap_maker(&mut sdk, &mint_authority).await;
+    let maker = get_and_bootstrap_maker(&mut sdk, &market, &mint_authority).await;
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
     let maker_order_packet = OrderPacket::new_limit_order_default(
         Side::Ask,
-        sdk.float_price_to_ticks(10.0),
+        meta.float_price_to_ticks_rounded_up(10.0),
         1_000_000_000,
     );
     let limit_order_ix = create_new_order_instruction(
-        &sdk.active_market_key,
+        &market,
         &maker.user.pubkey(),
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &meta.base_mint,
+        &meta.quote_mint,
         &maker_order_packet,
     );
     sdk.client
@@ -91,9 +92,9 @@ async fn test_change_market_fee_recipient_unclaimed_fees() {
         .unwrap();
 
     //Place cross order with taker (keypair 2)
-    let taker = get_and_bootstrap_taker(&mut sdk, &mint_authority).await;
+    let taker = get_and_bootstrap_taker(&mut sdk, &market, &mint_authority).await;
     let taker_order_packet = OrderPacket::new_ioc_buy_with_limit_price(
-        sdk.float_price_to_ticks(10.0),
+        meta.float_price_to_ticks_rounded_down(10.0),
         10_000_000,
         SelfTradeBehavior::Abort,
         None,
@@ -101,10 +102,10 @@ async fn test_change_market_fee_recipient_unclaimed_fees() {
         false,
     );
     let taker_order_ix = create_new_order_instruction(
-        &sdk.active_market_key,
+        &market,
         &taker.user.pubkey(),
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &meta.base_mint,
+        &meta.quote_mint,
         &taker_order_packet,
     );
 
@@ -116,17 +117,13 @@ async fn test_change_market_fee_recipient_unclaimed_fees() {
     // Assert that market has unclaimed fees
     let (unclaimed_fees, current_fee_recipient) = {
         // Check if there are unclaimed fees in the market account. If so, generate change fee with unclaimed ix
-        let market_data = sdk
-            .client
-            .get_account_data(&sdk.active_market_key)
-            .await
-            .unwrap();
+        let market_data = sdk.client.get_account_data(&market).await.unwrap();
         let (header_bytes, market_bytes) = market_data.split_at(size_of::<MarketHeader>());
         let market_header = bytemuck::try_from_bytes::<MarketHeader>(header_bytes).unwrap();
 
         println!("Current authority: {}", market_header.authority);
 
-        let seat = get_seat_manager_address(&sdk.active_market_key);
+        let seat = get_seat_manager_address(&market);
         println!("Seat manager address: {:?}", seat);
         println!("Seat manager id: {}", phoenix_seat_manager::id());
         println!("Current fee recipient: {}", market_header.fee_recipient);
@@ -148,10 +145,10 @@ async fn test_change_market_fee_recipient_unclaimed_fees() {
     let new_fee_recipient = Pubkey::new_unique();
 
     let claim_fees_ix = create_change_market_fee_recipient_instruction(
-        &sdk.active_market_key,
+        &market,
         &sdk.client.payer.pubkey(),
         &new_fee_recipient,
-        &sdk.quote_mint,
+        &meta.quote_mint,
         &current_fee_recipient,
     );
 
@@ -167,11 +164,7 @@ async fn test_change_market_fee_recipient_unclaimed_fees() {
         .unwrap();
 
     // Assert that the market authority successor is set to the new keypair
-    let market_account_data = sdk
-        .client
-        .get_account_data(&sdk.active_market_key)
-        .await
-        .unwrap();
+    let market_account_data = sdk.client.get_account_data(&market).await.unwrap();
     let (header_bytes, _bytes) = market_account_data.split_at(size_of::<MarketHeader>());
 
     let header = bytemuck::try_from_bytes::<MarketHeader>(header_bytes).unwrap();
@@ -181,17 +174,23 @@ async fn test_change_market_fee_recipient_unclaimed_fees() {
 
 #[tokio::test]
 async fn test_change_market_fee_recipient_invalid_authority() {
-    let PhoenixTestClient { ctx: _, sdk, .. } = bootstrap_default(0).await;
+    let PhoenixTestClient {
+        ctx: _,
+        market,
+        sdk,
+        ..
+    } = bootstrap_default(0).await;
     println!("Seat program authority: {}", sdk.client.payer.pubkey());
 
     let new_fee_recipient = Pubkey::new_unique();
     let incorrect_authority = Keypair::new();
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
 
     let change_market_fee_recipient_ix = create_change_market_fee_recipient_instruction(
-        &sdk.active_market_key,
+        &market,
         &incorrect_authority.pubkey(),
         &new_fee_recipient,
-        &sdk.quote_mint,
+        &meta.quote_mint,
         &sdk.client.payer.pubkey(),
     );
 

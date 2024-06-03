@@ -15,6 +15,7 @@ async fn test_claim_seat_manager_authority_happy_path() {
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority: _,
     } = bootstrap_default(5).await;
 
@@ -22,7 +23,7 @@ async fn test_claim_seat_manager_authority_happy_path() {
 
     let name_successor_ix = create_name_seat_manager_successor_instruction(
         &sdk.client.payer.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &successor.pubkey(),
     );
 
@@ -31,17 +32,15 @@ async fn test_claim_seat_manager_authority_happy_path() {
         .await
         .unwrap();
 
-    let claim_authority_ix = create_claim_seat_manager_authority_instruction(
-        &sdk.active_market_key,
-        &successor.pubkey(),
-    );
+    let claim_authority_ix =
+        create_claim_seat_manager_authority_instruction(&market, &successor.pubkey());
 
     sdk.client
         .sign_send_instructions(vec![claim_authority_ix], vec![&successor])
         .await
         .unwrap();
 
-    let (seat_manager_address, _) = get_seat_manager_address(&sdk.active_market_key);
+    let (seat_manager_address, _) = get_seat_manager_address(&market);
     let seat_manager_data = sdk
         .client
         .get_account_data(&seat_manager_address)
@@ -57,6 +56,7 @@ async fn test_claim_seat_manager_authority_fails_if_sucessor_not_signer_or_wrong
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority: _,
     } = bootstrap_default(5).await;
 
@@ -64,7 +64,7 @@ async fn test_claim_seat_manager_authority_fails_if_sucessor_not_signer_or_wrong
 
     let name_successor_ix = create_name_seat_manager_successor_instruction(
         &sdk.client.payer.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &successor.pubkey(),
     );
 
@@ -73,10 +73,8 @@ async fn test_claim_seat_manager_authority_fails_if_sucessor_not_signer_or_wrong
         .await
         .unwrap();
 
-    let claim_authority_ix = create_claim_seat_manager_authority_instruction(
-        &sdk.active_market_key,
-        &successor.pubkey(),
-    );
+    let claim_authority_ix =
+        create_claim_seat_manager_authority_instruction(&market, &successor.pubkey());
 
     // Fails if sucessor is not a signer
     assert!(sdk
@@ -88,10 +86,8 @@ async fn test_claim_seat_manager_authority_fails_if_sucessor_not_signer_or_wrong
     // Fails if wrong sucessor tries to claim
     let unauthorsized_successor = Keypair::new();
 
-    let claim_authority_ix = create_claim_seat_manager_authority_instruction(
-        &sdk.active_market_key,
-        &unauthorsized_successor.pubkey(),
-    );
+    let claim_authority_ix =
+        create_claim_seat_manager_authority_instruction(&market, &unauthorsized_successor.pubkey());
 
     assert!(sdk
         .client

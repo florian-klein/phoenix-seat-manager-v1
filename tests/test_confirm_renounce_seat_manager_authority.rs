@@ -18,6 +18,7 @@ use crate::setup::init::PhoenixTestClient;
 async fn test_confirm_renounce_seat_manager_authority_success() {
     let PhoenixTestClient {
         ctx: _,
+        market,
         sdk,
         mint_authority: _,
     } = bootstrap_default(5).await;
@@ -25,7 +26,7 @@ async fn test_confirm_renounce_seat_manager_authority_success() {
     let initiate_renounce_psm_authority_ix =
         create_initiate_renounce_seat_manager_authority_instruction(
             &sdk.client.payer.pubkey(),
-            &sdk.active_market_key,
+            &market,
         );
 
     sdk.client
@@ -36,7 +37,7 @@ async fn test_confirm_renounce_seat_manager_authority_success() {
     let confimr_renounce_psm_authority_ix =
         create_confirm_renounce_seat_manager_authority_instruction(
             &sdk.client.payer.pubkey(),
-            &sdk.active_market_key,
+            &market,
         );
 
     sdk.client
@@ -44,7 +45,7 @@ async fn test_confirm_renounce_seat_manager_authority_success() {
         .await
         .unwrap();
 
-    let (seat_manager_address, _) = get_seat_manager_address(&sdk.active_market_key);
+    let (seat_manager_address, _) = get_seat_manager_address(&market);
     let seat_manager_data = sdk
         .client
         .get_account_data(&seat_manager_address)
@@ -56,7 +57,7 @@ async fn test_confirm_renounce_seat_manager_authority_success() {
 
     // Assert that an admin action authorized by the previous authority fails.
     let change_market_status = create_change_market_status_instruction(
-        &sdk.active_market_key,
+        &market,
         &sdk.client.payer.pubkey(),
         MarketStatus::Paused,
     );
@@ -73,13 +74,14 @@ async fn test_confirm_renounce_seat_manager_authority_fails_unauthorized_signer(
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority: _,
     } = bootstrap_default(5).await;
 
     let initiate_renounce_sm_authority_ix =
         create_initiate_renounce_seat_manager_authority_instruction(
             &sdk.client.payer.pubkey(),
-            &sdk.active_market_key,
+            &market,
         );
 
     sdk.client
@@ -95,7 +97,7 @@ async fn test_confirm_renounce_seat_manager_authority_fails_unauthorized_signer(
     let confirm_renounce_sm_authority_ix =
         create_confirm_renounce_seat_manager_authority_instruction(
             &unauthorized_signer.pubkey(),
-            &sdk.active_market_key,
+            &market,
         );
 
     assert!(sdk
@@ -109,7 +111,7 @@ async fn test_confirm_renounce_seat_manager_authority_fails_unauthorized_signer(
 
     let mut confirm_renounce_ix = create_confirm_renounce_seat_manager_authority_instruction(
         &sdk.client.payer.pubkey(),
-        &sdk.active_market_key,
+        &market,
     );
 
     confirm_renounce_ix.accounts[1].is_signer = false;
@@ -136,13 +138,14 @@ async fn test_confirm_renounce_seat_manager_authority_fails_if_not_initiated() {
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority: _,
     } = bootstrap_default(5).await;
 
     let confirm_renounce_sm_authority_ix =
         create_confirm_renounce_seat_manager_authority_instruction(
             &sdk.client.payer.pubkey(),
-            &sdk.active_market_key,
+            &market,
         );
 
     assert!(sdk

@@ -1,4 +1,3 @@
-use ellipsis_client::program_test::*;
 use phoenix::program::create_deposit_funds_instruction;
 use phoenix::program::deposit::DepositParams;
 use phoenix_seat_manager::instruction_builders::create_claim_seat_instruction;
@@ -7,6 +6,7 @@ use phoenix_seat_manager::instruction_builders::EvictTraderAccountBackup;
 use rand::seq::IteratorRandom;
 use rand::thread_rng;
 use solana_program::system_instruction;
+use solana_program_test::*;
 use solana_sdk::compute_budget::ComputeBudgetInstruction;
 use solana_sdk::signature::{Keypair, Signer};
 
@@ -25,17 +25,25 @@ async fn test_seat_manager() {
     let PhoenixTestClient {
         ctx,
         sdk,
+        market,
         mint_authority,
     } = bootstrap_default(0).await;
+    let meta = sdk.get_market_metadata(&market).await.unwrap();
     // Create 30
     let mut market_traders = vec![];
     for i in 0..NUM_SEATS {
-        let t = setup_account(&sdk.client, &mint_authority, sdk.base_mint, sdk.quote_mint).await;
+        let t = setup_account(
+            &sdk.client,
+            &mint_authority,
+            meta.base_mint,
+            meta.quote_mint,
+        )
+        .await;
         airdrop(&sdk.client, &t.user.pubkey(), 100_000_000)
             .await
             .unwrap();
         if i % 100 == 0 {
-            let traders = sdk.get_traders().await;
+            let traders = sdk.get_traders_with_market_key(&market).await.unwrap();
             assert!(traders.len() == i);
             let mut rng = thread_rng();
             let sample = traders
@@ -56,9 +64,9 @@ async fn test_seat_manager() {
                             1781760,
                         ),
                         create_evict_seat_instruction(
-                            &sdk.active_market_key,
-                            &sdk.base_mint,
-                            &sdk.quote_mint,
+                            &market,
+                            &meta.base_mint,
+                            &meta.quote_mint,
                             &t.user.pubkey(),
                             sample,
                         ),
@@ -69,16 +77,16 @@ async fn test_seat_manager() {
                 .unwrap();
 
             // Can't evict a seat while the market is not full
-            let traders = sdk.get_traders().await;
+            let traders = sdk.get_traders_with_market_key(&market).await.unwrap();
             assert!(traders.len() == i);
             println!("Created {} traders", i);
         }
 
         let deposit_ix = create_deposit_funds_instruction(
-            &sdk.active_market_key,
+            &market,
             &t.user.pubkey(),
-            &sdk.base_mint,
-            &sdk.quote_mint,
+            &meta.base_mint,
+            &meta.quote_mint,
             &DepositParams {
                 quote_lots_to_deposit: 1,
                 base_lots_to_deposit: 1,
@@ -95,16 +103,16 @@ async fn test_seat_manager() {
                     spl_associated_token_account::instruction::create_associated_token_account_idempotent(
                         &sdk.client.payer.pubkey(),
                         &t.user.pubkey(),
-                        &sdk.base_mint,
+                        &meta.base_mint,
                         &spl_token::id(),
                     ),
                     spl_associated_token_account::instruction::create_associated_token_account_idempotent(
                         &sdk.client.payer.pubkey(),
                         &t.user.pubkey(),
-                        &sdk.quote_mint,
+                        &meta.quote_mint,
                         &spl_token::id(),
                     ),
-                    create_claim_seat_instruction(&t.user.pubkey(), &sdk.active_market_key),
+                    create_claim_seat_instruction(&t.user.pubkey(), &market),
                     deposit_ix,
                 ],
                 vec![&sdk.client.payer, &t.user],
@@ -115,7 +123,7 @@ async fn test_seat_manager() {
     }
 
     let t = Keypair::new();
-    let traders = sdk.get_traders().await;
+    let traders = sdk.get_traders_with_market_key(&market).await.unwrap();
     assert!(traders.len() == NUM_SEATS);
     let mut rng = thread_rng();
     let sample = traders
@@ -129,9 +137,9 @@ async fn test_seat_manager() {
 
     // Can evict at most 1 seat when the market is full
     let evict_seat_ix = create_evict_seat_instruction(
-        &sdk.active_market_key,
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &market,
+        &meta.base_mint,
+        &meta.quote_mint,
         &t.pubkey(),
         sample,
     );
@@ -145,7 +153,7 @@ async fn test_seat_manager() {
         )
         .await
         .unwrap();
-    let traders = sdk.get_traders().await;
+    let traders = sdk.get_traders_with_market_key(&market).await.unwrap();
     assert!(traders.len() == NUM_SEATS - 1);
 
     // Seat manager authority can evict multiple seats
@@ -158,9 +166,9 @@ async fn test_seat_manager() {
         })
         .choose_multiple(&mut rng, 3);
     let evict_seat_ix = create_evict_seat_instruction(
-        &sdk.active_market_key,
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &market,
+        &meta.base_mint,
+        &meta.quote_mint,
         &sdk.client.payer.pubkey(),
         sample,
     );
@@ -175,6 +183,7 @@ async fn test_seat_manager() {
         )
         .await
         .unwrap();
-    let traders = sdk.get_traders().await;
+    let traders = sdk.get_traders_with_market_key(&market).await.unwrap();
+
     assert!(traders.len() == NUM_SEATS - 4);
 }

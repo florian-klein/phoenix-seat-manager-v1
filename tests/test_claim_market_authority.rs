@@ -29,6 +29,7 @@ async fn test_claim_market_authority_reclaim_works_with_fresh_dmms() {
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority: _,
     } = bootstrap_default(5).await;
 
@@ -37,7 +38,7 @@ async fn test_claim_market_authority_reclaim_works_with_fresh_dmms() {
 
     let claim_seat = create_claim_seat_authorized_instruction(
         &trader_keypair.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &sdk.client.payer.pubkey(),
     );
 
@@ -47,7 +48,7 @@ async fn test_claim_market_authority_reclaim_works_with_fresh_dmms() {
         .unwrap();
 
     let add_mm_ix = create_add_dmm_instruction(
-        &sdk.active_market_key,
+        &market,
         &sdk.client.payer.pubkey(),
         &trader_keypair.pubkey(),
     );
@@ -57,7 +58,7 @@ async fn test_claim_market_authority_reclaim_works_with_fresh_dmms() {
         .await
         .unwrap();
 
-    let seat_manager_address = get_seat_manager_address(&sdk.active_market_key).0;
+    let seat_manager_address = get_seat_manager_address(&market).0;
     let seat_manager_data = sdk
         .client
         .get_account_data(&seat_manager_address)
@@ -76,7 +77,7 @@ async fn test_claim_market_authority_reclaim_works_with_fresh_dmms() {
     // Pass market authority to new keypair
     let new_authority = Keypair::new();
     let name_market_authority_successor_ix = create_name_market_authority_successor_instruction(
-        &sdk.active_market_key,
+        &market,
         &sdk.client.payer.pubkey(),
         &new_authority.pubkey(),
     );
@@ -87,29 +88,22 @@ async fn test_claim_market_authority_reclaim_works_with_fresh_dmms() {
         .unwrap();
 
     let claim_market_authority =
-        create_claim_authority_instruction(&new_authority.pubkey(), &sdk.active_market_key);
+        create_claim_authority_instruction(&new_authority.pubkey(), &market);
 
     sdk.client
         .sign_send_instructions(vec![claim_market_authority], vec![&new_authority])
         .await
         .unwrap();
 
-    let market_data = sdk
-        .client
-        .get_account_data(&sdk.active_market_key)
-        .await
-        .unwrap();
+    let market_data = sdk.client.get_account_data(&market).await.unwrap();
 
     let header_bytes = &market_data[..size_of::<MarketHeader>()];
     let market_header = bytemuck::try_from_bytes::<MarketHeader>(header_bytes).unwrap();
     assert!(market_header.authority == new_authority.pubkey());
 
     // New authority names seat manager as new market successor
-    let name_market_authority_successor_ix = create_name_successor_instruction(
-        &new_authority.pubkey(),
-        &sdk.active_market_key,
-        &seat_manager_address,
-    );
+    let name_market_authority_successor_ix =
+        create_name_successor_instruction(&new_authority.pubkey(), &market, &seat_manager_address);
 
     sdk.client
         .sign_send_instructions(
@@ -120,13 +114,11 @@ async fn test_claim_market_authority_reclaim_works_with_fresh_dmms() {
         .unwrap();
 
     // Seat manager claim authority still works
-    let claim_market_authority = create_claim_market_authority_instruction(
-        &sdk.active_market_key,
-        &sdk.client.payer.pubkey(),
-    );
+    let claim_market_authority =
+        create_claim_market_authority_instruction(&market, &sdk.client.payer.pubkey());
     // Add lamports to the seat collector address because a trader exists on the market.
     let required_lamports = sdk.client.rent_exempt(spl_token::state::Account::LEN) * 2;
-    let seat_deposit_collector = get_seat_deposit_collector_address(&sdk.active_market_key).0;
+    let seat_deposit_collector = get_seat_deposit_collector_address(&market).0;
 
     airdrop(&sdk.client, &seat_deposit_collector, required_lamports)
         .await
@@ -137,11 +129,7 @@ async fn test_claim_market_authority_reclaim_works_with_fresh_dmms() {
         .await
         .unwrap();
 
-    let market_data = sdk
-        .client
-        .get_account_data(&sdk.active_market_key)
-        .await
-        .unwrap();
+    let market_data = sdk.client.get_account_data(&market).await.unwrap();
 
     let header_bytes = &market_data[..size_of::<MarketHeader>()];
     let market_header = bytemuck::try_from_bytes::<MarketHeader>(header_bytes).unwrap();
@@ -166,6 +154,7 @@ async fn test_claim_market_authority_requires_rent_for_existing_traders() {
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority: _,
     } = bootstrap_default_without_sm_claiming_authority(5).await;
 
@@ -176,27 +165,27 @@ async fn test_claim_market_authority_requires_rent_for_existing_traders() {
     let claim_seat = create_request_seat_authorized_instruction(
         &sdk.client.payer.pubkey(),
         &sdk.client.payer.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &trader_keypair.pubkey(),
     );
 
     let claim_seat_two = create_request_seat_authorized_instruction(
         &sdk.client.payer.pubkey(),
         &sdk.client.payer.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &trader_keypair_two.pubkey(),
     );
 
     let change_seat_status_one = create_change_seat_status_instruction(
         &sdk.client.payer.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &trader_keypair.pubkey(),
         SeatApprovalStatus::Approved,
     );
 
     let change_seat_status_two = create_change_seat_status_instruction(
         &sdk.client.payer.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &trader_keypair_two.pubkey(),
         SeatApprovalStatus::Approved,
     );
@@ -214,29 +203,23 @@ async fn test_claim_market_authority_requires_rent_for_existing_traders() {
         .await
         .unwrap();
 
-    let claim_market_authority = create_claim_market_authority_instruction(
-        &sdk.active_market_key,
-        &sdk.client.payer.pubkey(),
-    );
-    let market_bytes = sdk
-        .client
-        .get_account_data(&sdk.active_market_key)
-        .await
-        .unwrap();
+    let claim_market_authority =
+        create_claim_market_authority_instruction(&market, &sdk.client.payer.pubkey());
+    let market_bytes = sdk.client.get_account_data(&market).await.unwrap();
     let (header_bytes, market_bytes) = market_bytes.split_at(size_of::<MarketHeader>());
     let market_header = bytemuck::try_from_bytes::<MarketHeader>(header_bytes).unwrap();
 
-    let market = load_with_dispatch(&market_header.market_size_params, market_bytes)
+    let phoenix_market = load_with_dispatch(&market_header.market_size_params, market_bytes)
         .unwrap()
         .inner;
 
-    let registered_traders = market.get_registered_traders();
+    let registered_traders = phoenix_market.get_registered_traders();
 
     let required_lamports = sdk.client.rent_exempt(spl_token::state::Account::LEN)
         * 2
         * registered_traders.len() as u64; // Times 2 for two token accounts for each trader
 
-    let seat_deposit_collector = get_seat_deposit_collector_address(&sdk.active_market_key).0;
+    let seat_deposit_collector = get_seat_deposit_collector_address(&market).0;
     println!("Required lamports: {}", required_lamports);
 
     airdrop(&sdk.client, &seat_deposit_collector, required_lamports)
@@ -255,6 +238,7 @@ async fn test_claim_market_authority_fails_if_deposit_collector_has_insufficient
     let PhoenixTestClient {
         ctx: _,
         sdk,
+        market,
         mint_authority: _,
     } = bootstrap_default_without_sm_claiming_authority(5).await;
 
@@ -265,27 +249,27 @@ async fn test_claim_market_authority_fails_if_deposit_collector_has_insufficient
     let claim_seat = create_request_seat_authorized_instruction(
         &sdk.client.payer.pubkey(),
         &sdk.client.payer.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &trader_keypair.pubkey(),
     );
 
     let claim_seat_two = create_request_seat_authorized_instruction(
         &sdk.client.payer.pubkey(),
         &sdk.client.payer.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &trader_keypair_two.pubkey(),
     );
 
     let change_seat_status_one = create_change_seat_status_instruction(
         &sdk.client.payer.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &trader_keypair.pubkey(),
         SeatApprovalStatus::Approved,
     );
 
     let change_seat_status_two = create_change_seat_status_instruction(
         &sdk.client.payer.pubkey(),
-        &sdk.active_market_key,
+        &market,
         &trader_keypair_two.pubkey(),
         SeatApprovalStatus::Approved,
     );
@@ -303,16 +287,10 @@ async fn test_claim_market_authority_fails_if_deposit_collector_has_insufficient
         .await
         .unwrap();
 
-    let claim_market_authority = create_claim_market_authority_instruction(
-        &sdk.active_market_key,
-        &sdk.client.payer.pubkey(),
-    );
+    let claim_market_authority =
+        create_claim_market_authority_instruction(&market, &sdk.client.payer.pubkey());
 
-    let market_bytes = sdk
-        .client
-        .get_account_data(&sdk.active_market_key)
-        .await
-        .unwrap();
+    let market_bytes = sdk.client.get_account_data(&market).await.unwrap();
     let (header_bytes, market_bytes) = market_bytes.split_at(size_of::<MarketHeader>());
     let market_header = bytemuck::try_from_bytes::<MarketHeader>(header_bytes).unwrap();
 
