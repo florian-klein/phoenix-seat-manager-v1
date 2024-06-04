@@ -6,7 +6,6 @@ use ellipsis_client::EllipsisClient;
 use phoenix::program::create_deposit_funds_instruction;
 use phoenix::program::deposit::DepositParams;
 use phoenix_seat_manager::get_authorized_delegate_pda;
-
 use phoenix_seat_manager::instruction_builders::create_add_approved_evictor_instruction;
 use phoenix_seat_manager::instruction_builders::create_claim_seat_instruction;
 use phoenix_seat_manager::instruction_builders::create_evict_seat_with_authorized_delegate_instruction;
@@ -14,7 +13,6 @@ use phoenix_seat_manager::instruction_builders::create_remove_approved_evictor_i
 use phoenix_seat_manager::instruction_builders::EvictTraderAccountBackup;
 use setup::helpers::airdrop;
 use setup::helpers::sol;
-use setup::init::bootstrap_default_without_sm_claiming_authority;
 use setup::init::setup_account;
 use solana_sdk::compute_budget::ComputeBudgetInstruction;
 use solana_sdk::signature::Keypair;

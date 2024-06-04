@@ -102,10 +102,9 @@ pub fn process_evict_seat(
     let quote_mint_ai = MintAccountInfo::new(&accounts[6])?;
 
     // Retrieve seat manager seeds and check if signer is authorized
-    let is_fully_authorized = *signer.key == seat_manager.load()?.authority;
+    let mut is_seat_manager_authority = *signer.key == seat_manager.load()?.authority;
 
     // If we are doing eviction with an authorized delegate, we need to validate the signer
-    let mut is_authorized_delegate = false;
     if evict_with_delegate {
         let authorized_delegate_pda = &accounts[13];
 
@@ -118,7 +117,10 @@ pub fn process_evict_seat(
         )?;
 
         // If the PDA exists, then the signer is an authorized delegate
-        is_authorized_delegate = does_pda_exist(program_id, authorized_delegate_pda);
+        let is_authorized_delegate = does_pda_exist(program_id, authorized_delegate_pda);
+
+        // If the seat manager auth passed the delegate flag by accident we'll still let them evict
+        is_seat_manager_authority = is_seat_manager_authority || is_authorized_delegate;
     }
 
     // Get market parameters to perform checks
@@ -198,8 +200,7 @@ pub fn process_evict_seat(
 
             let can_evict_trader = seat_is_empty // anyone can permissionlessly evict an empty seat
                 || (seats_are_full && seat_is_unlocked) // anyone can permissionlessly evict an unlocked seat when seats are full
-                || (is_fully_authorized && seat_is_unlocked) // the fully authorized seat manager can evict an unlocked seat
-                || (is_authorized_delegate && seat_is_unlocked); // the authorized delegate can evict an unlocked seat
+                || (is_seat_manager_authority && seat_is_unlocked); // the authorized user (authority or delegate) can evict an unlocked seat
 
             if can_evict_trader {
                 // Change seat status
@@ -289,7 +290,7 @@ pub fn process_evict_seat(
                 )?;
 
                 // If the signer is not authorized and if the currently evicted seat is not empty, only one eviction is allowed at a time
-                if !(is_fully_authorized || is_authorized_delegate) && !seat_is_empty {
+                if !is_seat_manager_authority && !seat_is_empty {
                     msg!("Successfully evicted 1 seat");
                     break;
                 }
