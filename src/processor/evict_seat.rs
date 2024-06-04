@@ -288,8 +288,8 @@ pub fn process_evict_seat(
                     &evict_seat_cpi_context,
                 )?;
 
-                // If the signer is not fully authorized and if the currently evicted seat is not empty, only one eviction is allowed at a time
-                if !is_fully_authorized && !seat_is_empty {
+                // If the signer is not authorized and if the currently evicted seat is not empty, only one eviction is allowed at a time
+                if !(is_fully_authorized || is_authorized_delegate) && !seat_is_empty {
                     msg!("Successfully evicted 1 seat");
                     break;
                 }
