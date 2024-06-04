@@ -86,6 +86,7 @@ pub fn get_authorized_delegate_pda(
         &[
             &seat_manager_authority.to_bytes(),
             &authorized_delegate.to_bytes(),
+            b"delegate",
         ],
         &crate::id(),
     )

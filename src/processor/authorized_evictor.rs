@@ -33,8 +33,8 @@ pub fn process_authorized_evictor(
             &system_program,
             program_id,
             &Rent::get()?,
-            1,
-            authorized_delegate_pda_seeds.clone(),
+            0,
+            authorized_delegate_pda_seeds,
         )?;
     } else {
         close_account(authorized_delegate_pda, seat_manager_authority.as_ref())?;
@@ -52,6 +52,7 @@ pub fn get_authorized_delegate_seeds_and_validate(
     let mut seeds = vec![
         seat_manager_authority.to_bytes().to_vec(),
         authorized_delegate.to_bytes().to_vec(),
+        b"delegate".to_vec(),
     ];
     let (derived_pda, bump) = Pubkey::find_program_address(
         seeds
