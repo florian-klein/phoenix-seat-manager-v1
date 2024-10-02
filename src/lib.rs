@@ -1,4 +1,3 @@
-use ellipsis_macros::declare_id;
 use instruction::SeatManagerInstruction;
 use processor::{
     process_change_market_status, process_claim_market_authority, process_claim_seat,
@@ -8,6 +7,7 @@ use processor::{
 use solana_program::instruction::Instruction;
 use solana_program::msg;
 use solana_program::pubkey::Pubkey;
+use std::str::FromStr;
 
 use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
@@ -23,25 +23,11 @@ pub mod processor;
 pub mod seat_manager;
 pub mod shank_structs;
 
-#[cfg(not(feature = "no-entrypoint"))]
-use solana_security_txt::security_txt;
-
-#[cfg(not(feature = "no-entrypoint"))]
-security_txt! {
-    // Required fields
-    name: "Phoenix Seat Manager V1",
-    project_url: "https://ellipsislabs.xyz/",
-    contacts: "email:maintainers@ellipsislabs.xyz",
-    policy: "https://github.com/Ellipsis-Labs/phoenix-v1/blob/master/SECURITY.md",
-    // Optional Fields
-    preferred_languages: "en",
-    source_code: "https://github.com/Ellipsis-Labs/phoenix-seat-manager-v1",
-    auditors: "contact@osec.io"
-}
-
 const MAX_DMMS: u64 = 128;
 
-declare_id!("PSMxQbAoDWDbvd9ezQJgARyq6R9L5kJAasaLDVcZwf1");
+pub fn id() -> Pubkey {
+    Pubkey::from_str("PSMxQbAoDWDbvd9ezQJgARyq6R9L5kJAasaLDVcZwf1").unwrap()
+}
 
 pub fn get_seat_manager_seeds(
     market: &Pubkey,
