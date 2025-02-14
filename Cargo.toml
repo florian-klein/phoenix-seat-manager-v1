@@ -26,18 +26,18 @@ overflow-checks = true
 
 [dependencies]
 phoenix-common = {git = "https://github.com/florian-klein/phoenix-v1.git", branch = "crate", features = ["no-entrypoint"]}
-shank = "0.0.12"
-lib-sokoban = "0.3.3" 
-itertools = "0.10.5"
-static_assertions = "1.1.0"
-spl-token = { version = ">=3.5.0", features = ["no-entrypoint"] }
-spl-associated-token-account = { version = ">=2.3.0", features = [ "no-entrypoint" ] } 
-toml_edit = "0.18.1"
-proc-macro-crate = "1.3.1"
-solana-program = "2.1.4"
-borsh = "0.10.4"
-bytemuck = "1.20.0"
-num_enum = "0.5.11"
+shank = "*"
+lib-sokoban =  "*"
+itertools = "*"
+static_assertions = "*"
+spl-token = { version = "*", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "*", features = [ "no-entrypoint" ] } 
+toml_edit = "*"
+proc-macro-crate = "*"
+solana-program = "*"
+borsh = "*"
+bytemuck = "*"
+num_enum = "*"
 
 [dev-dependencies]
 rand = "0.7.3"
