@@ -227,11 +227,7 @@ pub fn create_change_market_status_instruction(
             AccountMeta::new(seat_manager, false),
             AccountMeta::new_readonly(*authority, true),
         ],
-        data: [
-            SeatManagerInstruction::ChangeMarketStatus.to_vec(),
-            status.try_to_vec().unwrap(),
-        ]
-        .concat(),
+        data: [SeatManagerInstruction::ChangeMarketStatus.to_vec(), todo!()].concat(),
     }
 }
 
